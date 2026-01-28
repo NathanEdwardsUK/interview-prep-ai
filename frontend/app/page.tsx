@@ -3,6 +3,10 @@ import { planApi } from "../lib/api";
 import type { Plan } from "../lib/types";
 import { PlanTopicsClient } from "./PlanTopicsClient";
 import { PlanCreatorClient } from "./PlanCreatorClient";
+import { PlanRefinementClient } from "./PlanRefinementClient";
+import { UserContextClient } from "./UserContextClient";
+import { SuggestedSessionClient } from "./SuggestedSessionClient";
+import { SessionHistoryClient } from "./SessionHistoryClient";
 
 async function fetchPlan(token: string | null): Promise<Plan | null> {
   if (!token) return null;
@@ -42,7 +46,12 @@ export default async function Home() {
         {token && plan && (
           <div className="space-y-6">
             <section className="border rounded-lg p-6 bg-white shadow-sm">
-              <h2 className="text-2xl font-semibold mb-2">Plan overview</h2>
+              <SuggestedSessionClient />
+            </section>
+            <section className="border rounded-lg p-6 bg-white shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-2xl font-semibold">Plan overview</h2>
+              </div>
               <p className="text-gray-700">
                 <span className="font-medium">Target role:</span>{" "}
                 {plan.plan_overview.target_role}
@@ -66,7 +75,25 @@ export default async function Home() {
               </h2>
               <PlanTopicsClient topics={plan.plan_topics} />
             </section>
+
+            <section className="border rounded-lg p-6 bg-white shadow-sm">
+              <PlanRefinementClient currentPlan={plan} />
+            </section>
+
+            <section className="border rounded-lg p-6 bg-white shadow-sm">
+              <UserContextClient />
+            </section>
+
+            <section className="border rounded-lg p-6 bg-white shadow-sm">
+              <SessionHistoryClient />
+            </section>
           </div>
+        )}
+
+        {token && !plan && (
+          <section className="mt-6 border rounded-lg p-6 bg-white shadow-sm">
+            <UserContextClient />
+          </section>
         )}
       </div>
     </main>

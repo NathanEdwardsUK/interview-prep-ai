@@ -45,6 +45,9 @@ class PlanResponse(BaseModel):
 class SuggestNewPlanRequest(BaseModel):
     role: str
     raw_user_context: str
+    time_available_minutes: int | None = None
+    weak_areas: List[str] | None = None
+    motivation_level: str | None = None  # e.g. "low", "medium", "high" or "1"-"10"
 
 
 class SuggestChangesRequest(BaseModel):
@@ -56,3 +59,11 @@ class SuggestChangesRequest(BaseModel):
 
 class ApprovePlanRequest(BaseModel):
     plan: PlanResponse
+
+
+class UserContextResponse(BaseModel):
+    context_text: str
+
+
+class UserContextRequest(BaseModel):
+    context_text: str

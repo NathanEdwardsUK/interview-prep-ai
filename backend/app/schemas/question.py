@@ -43,8 +43,9 @@ class GenerateQuestionsResponse(BaseModel):
 
 
 class EvaluateAnswerRequest(BaseModel):
-    question_id: int
+    question: str  # The actual question text
     raw_answer: str
+    answer_time_seconds: int | None = None  # Time spent answering in seconds
 
 
 class EvaluateAnswerResponse(BaseModel):
@@ -52,3 +53,19 @@ class EvaluateAnswerResponse(BaseModel):
     positive_feedback: List[str]
     improvement_areas: List[str]
     anchors: List[Dict[str, str]]
+
+
+class GenerateStoryRequest(BaseModel):
+    question: str
+
+
+class StoryStructureResponse(BaseModel):
+    id: int
+    question_id: int
+    structure_text: str
+    created_at: str
+    updated_at: str
+
+
+class UpdateStoryRequest(BaseModel):
+    structure_text: str

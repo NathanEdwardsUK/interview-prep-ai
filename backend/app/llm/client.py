@@ -3,7 +3,13 @@ from typing import Any, Dict
 from app.config import settings
 import openai
 from anthropic import Anthropic
-from app.llm.modes import SuggestPlanResponse, PlanOverview, PlanTopicSchema
+from app.llm.modes import (
+    SuggestPlanResponse, PlanOverview, PlanTopicSchema,
+    GenerateQuestionsResponse, QuestionSchema,
+    EvaluateAnswerResponse, Anchor,
+    ReconcileSessionResponse, QuestionAttemptSummary, BestAnchor,
+    GenerateStoryStructureResponse,
+)
 
 
 class LLMClient(ABC):
@@ -125,11 +131,21 @@ class StubLLMClient(LLMClient):
         Generate structured output matching the provided schema.
         Returns hardcoded responses based on the schema type.
         """
-        # Detect SuggestPlanResponse-like schemas by presence of plan_overview
-        if "plan_overview" in response_schema.get("properties", {}):
-            return self._get_suggest_plan_response()
+        # Detect schema type by checking properties
+        props = response_schema.get("properties", {})
         
-        # For other schemas, return empty/default responses (extend as needed)
+        if "plan_overview" in props:
+            return self._get_suggest_plan_response()
+        elif "questions" in props:
+            return self._get_generate_questions_response()
+        elif "score" in props and "positive_feedback" in props:
+            return self._get_evaluate_answer_response()
+        elif "question_attempts" in props:
+            return self._get_reconcile_session_response()
+        elif "structure_text" in props:
+            return self._get_generate_story_structure_response()
+        
+        # For other schemas, return empty/default responses
         return {}
     
     def _get_suggest_plan_response(self) -> Dict[str, Any]:
@@ -171,6 +187,88 @@ class StubLLMClient(LLMClient):
                     expected_outcome="Articulate experiences clearly",
                 ),
             ],
+        )
+        return response.model_dump()
+    
+    def _get_generate_questions_response(self) -> Dict[str, Any]:
+        """Return a hardcoded GenerateQuestionsResponse"""
+        response = GenerateQuestionsResponse(
+            questions=[
+                QuestionSchema(
+                    question="Explain the difference between a stack and a queue.",
+                    status="new",
+                    redo_reason=None,
+                    difficulty="easy"
+                ),
+                QuestionSchema(
+                    question="How would you implement a binary search tree?",
+                    status="new",
+                    redo_reason=None,
+                    difficulty="medium"
+                ),
+                QuestionSchema(
+                    question="Design a system to handle 1 million requests per second.",
+                    status="new",
+                    redo_reason=None,
+                    difficulty="hard"
+                ),
+            ]
+        )
+        return response.model_dump()
+    
+    def _get_evaluate_answer_response(self) -> Dict[str, Any]:
+        """Return a hardcoded EvaluateAnswerResponse"""
+        response = EvaluateAnswerResponse(
+            score=7,
+            positive_feedback=[
+                "Good structure and clear explanation",
+                "Demonstrated understanding of key concepts"
+            ],
+            improvement_areas=[
+                "Could provide more concrete examples",
+                "Consider discussing edge cases"
+            ],
+            anchors=[
+                Anchor(name="Core concept", anchor="The fundamental principle that explains the main idea"),
+                Anchor(name="Example", anchor="A practical illustration of how this applies in real scenarios")
+            ]
+        )
+        return response.model_dump()
+    
+    def _get_reconcile_session_response(self) -> Dict[str, Any]:
+        """Return a hardcoded ReconcileSessionResponse"""
+        response = ReconcileSessionResponse(
+            question_attempts=[
+                QuestionAttemptSummary(
+                    question="Explain the difference between a stack and a queue.",
+                    attempts=1,
+                    best_score=7,
+                    best_anchors=[
+                        BestAnchor(name="LIFO vs FIFO", anchor="Stack uses Last In First Out, queue uses First In First Out")
+                    ]
+                )
+            ]
+        )
+        return response.model_dump()
+    
+    def _get_generate_story_structure_response(self) -> Dict[str, Any]:
+        """Return a hardcoded GenerateStoryStructureResponse"""
+        response = GenerateStoryStructureResponse(
+            structure_text="""## Situation
+- [Describe the context and background]
+- [When and where did this happen?]
+
+## Task
+- [What was your responsibility or goal?]
+- [What challenges did you face?]
+
+## Action
+- [What specific steps did you take?]
+- [How did you collaborate or lead?]
+
+## Result
+- [What was the outcome?]
+- [What did you learn?]"""
         )
         return response.model_dump()
 

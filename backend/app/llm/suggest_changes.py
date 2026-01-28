@@ -1,5 +1,6 @@
 from app.llm.client import get_llm_client
 from app.llm.modes import MODES, SuggestPlanResponse
+from app.llm.retry import with_retry
 
 
 async def suggest_plan_changes(
@@ -52,11 +53,12 @@ Based on the current plan, user progress, and feedback, suggest an updated plan 
 Respond with a JSON object matching the required schema."""
     
     mode_config = MODES["suggest_plan_changes"]
-    response = await client.generate_structured(
-        prompt=prompt,
-        response_schema=mode_config["response_schema"],
-        max_tokens=mode_config["max_tokens"],
-        temperature=0.7
+    response = await with_retry(
+        lambda: client.generate_structured(
+            prompt=prompt,
+            response_schema=mode_config["response_schema"],
+            max_tokens=mode_config["max_tokens"],
+            temperature=0.7,
+        )
     )
-    
     return SuggestPlanResponse(**response)

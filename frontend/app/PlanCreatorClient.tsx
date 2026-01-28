@@ -12,6 +12,9 @@ export function PlanCreatorClient() {
 
   const [role, setRole] = useState("");
   const [context, setContext] = useState("");
+  const [timeAvailable, setTimeAvailable] = useState<number | "">("");
+  const [weakAreas, setWeakAreas] = useState("");
+  const [motivationLevel, setMotivationLevel] = useState("");
   const [suggestedPlan, setSuggestedPlan] = useState<Plan | null>(null);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -24,7 +27,11 @@ export function PlanCreatorClient() {
     try {
       const token = await getToken();
       const api = createApiClient(async () => token || null);
-      const plan = (await api.plan.suggestNew(role, context)) as Plan;
+      const plan = (await api.plan.suggestNew(role, context, {
+        time_available_minutes: timeAvailable === "" ? undefined : Number(timeAvailable),
+        weak_areas: weakAreas.trim() ? weakAreas.split(/[,;]/).map((s) => s.trim()).filter(Boolean) : undefined,
+        motivation_level: motivationLevel.trim() || undefined,
+      })) as Plan;
       setSuggestedPlan(plan);
     } catch (e: any) {
       setError(e?.message ?? "Failed to generate plan");
@@ -70,8 +77,52 @@ export function PlanCreatorClient() {
           value={role}
           onChange={(e) => setRole(e.target.value)}
           placeholder="e.g. Senior Backend Engineer"
-          className="w-full border rounded-md px-3 py-2 text-sm"
+          className="w-full border rounded-md px-3 py-2 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:border-slate-500"
         />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Time available per day (minutes)
+        </label>
+        <input
+          type="number"
+          min={5}
+          max={240}
+          value={timeAvailable === "" ? "" : timeAvailable}
+          onChange={(e) => setTimeAvailable(e.target.value === "" ? "" : parseInt(e.target.value, 10) || "")}
+          placeholder="e.g. 60"
+          className="w-full border rounded-md px-3 py-2 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:border-slate-500"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Areas of weakness (comma-separated)
+        </label>
+        <input
+          type="text"
+          value={weakAreas}
+          onChange={(e) => setWeakAreas(e.target.value)}
+          placeholder="e.g. system design, behavioral"
+          className="w-full border rounded-md px-3 py-2 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:border-slate-500"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Motivation level
+        </label>
+        <select
+          value={motivationLevel}
+          onChange={(e) => setMotivationLevel(e.target.value)}
+          className="w-full border rounded-md px-3 py-2 text-sm bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:border-slate-500"
+        >
+          <option value="">Select...</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
       </div>
 
       <div className="space-y-2">
@@ -82,7 +133,7 @@ export function PlanCreatorClient() {
           value={context}
           onChange={(e) => setContext(e.target.value)}
           placeholder="Describe your experience, strengths, and what you want to work on..."
-          className="w-full border rounded-md px-3 py-2 text-sm min-h-[120px]"
+          className="w-full border rounded-md px-3 py-2 text-sm min-h-[120px] bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:border-slate-500"
         />
       </div>
 

@@ -1,5 +1,6 @@
 from app.llm.client import get_llm_client
 from app.llm.modes import MODES, EvaluateAnswerResponse
+from app.llm.retry import with_retry
 
 
 async def evaluate_answer(
@@ -42,11 +43,12 @@ Be constructive and specific. Focus on helping the user improve.
 Respond with a JSON object matching the required schema."""
     
     mode_config = MODES["evaluate_answer"]
-    response = await client.generate_structured(
-        prompt=prompt,
-        response_schema=mode_config["response_schema"],
-        max_tokens=mode_config["max_tokens"],
-        temperature=0.5
+    response = await with_retry(
+        lambda: client.generate_structured(
+            prompt=prompt,
+            response_schema=mode_config["response_schema"],
+            max_tokens=mode_config["max_tokens"],
+            temperature=0.5,
+        )
     )
-    
     return EvaluateAnswerResponse(**response)

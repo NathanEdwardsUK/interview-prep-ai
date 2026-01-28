@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { createApiClient } from "../../../../lib/api";
 import type { Question, EvaluateAnswerResponse } from "../../../../lib/types";
 
 interface Props {
   sessionId: number;
+}
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export default function SessionClient({ sessionId }: Props) {
@@ -22,6 +28,104 @@ export default function SessionClient({ sessionId }: Props) {
   const [ending, setEnding] = useState(false);
   const [ended, setEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skippedIndices, setSkippedIndices] = useState<Set<number>>(new Set());
+  // Story structure: map question text -> { questionId, storyId }; current story text and ids
+  const [storyMap, setStoryMap] = useState<Record<string, { questionId: number; storyId: number }>>({});
+  const [storyText, setStoryText] = useState("");
+  const [storyId, setStoryId] = useState<number | null>(null);
+  const [loadingStory, setLoadingStory] = useState(false);
+  const [savingStory, setSavingStory] = useState(false);
+
+  // Session timer: start_time and planned_duration from API
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [plannedDurationMinutes, setPlannedDurationMinutes] = useState<number | null>(null);
+  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0);
+  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Per-question timer
+  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
+  const [questionElapsedSeconds, setQuestionElapsedSeconds] = useState(0);
+  const questionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const api = createApiClient(async () => token || null);
+        const session = (await api.study.getSession(sessionId)) as {
+          start_time: string;
+          planned_duration: number;
+          end_time?: string | null;
+        };
+        if (cancelled) return;
+        setSessionStartTime(new Date(session.start_time));
+        setPlannedDurationMinutes(session.planned_duration);
+        if (session.end_time) setEnded(true);
+      } catch {
+        if (!cancelled) setSessionStartTime(new Date());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, getToken]);
+
+  useEffect(() => {
+    if (!sessionStartTime || ended) return;
+    const tick = () => {
+      setSessionElapsedSeconds(Math.floor((Date.now() - sessionStartTime.getTime()) / 1000));
+    };
+    tick();
+    sessionTimerRef.current = setInterval(tick, 1000);
+    return () => {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    };
+  }, [sessionStartTime, ended]);
+
+  useEffect(() => {
+    if (selectedIndex == null) {
+      setQuestionStartTime(null);
+      setQuestionElapsedSeconds(0);
+      if (questionTimerRef.current) {
+        clearInterval(questionTimerRef.current);
+        questionTimerRef.current = null;
+      }
+      return;
+    }
+    const start = Date.now();
+    setQuestionStartTime(start);
+    setQuestionElapsedSeconds(0);
+    const id = setInterval(() => {
+      setQuestionElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    questionTimerRef.current = id;
+    return () => {
+      clearInterval(id);
+      questionTimerRef.current = null;
+    };
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    if (selectedIndex == null || !questions[selectedIndex]) return;
+    const q = questions[selectedIndex];
+    const meta = storyMap[q.question];
+    if (!meta || storyText !== "") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const api = createApiClient(async () => token || null);
+        const result = (await api.study.getStory(meta.questionId)) as { structure_text: string };
+        if (!cancelled) setStoryText(result.structure_text);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIndex, questions, storyMap, storyText]);
 
   const loadQuestions = async () => {
     setError(null);
@@ -35,6 +139,7 @@ export default function SessionClient({ sessionId }: Props) {
       setSelectedIndex(null);
       setAnswer("");
       setEvaluation(null);
+      setSkippedIndices(new Set());
     } catch (e: any) {
       setError(e?.message ?? "Failed to load questions");
     } finally {
@@ -46,13 +151,15 @@ export default function SessionClient({ sessionId }: Props) {
     if (selectedIndex == null || !questions[selectedIndex]) return;
     setError(null);
     setSubmitting(true);
+    const answerTimeSeconds = questionStartTime != null ? Math.floor((Date.now() - questionStartTime) / 1000) : undefined;
     try {
       const token = await getToken();
       const api = createApiClient(async () => token || null);
       const question = questions[selectedIndex];
       const payload = {
-        question_id: selectedIndex, // placeholder id; backend currently uses sample text
+        question: question.question,
         raw_answer: answer,
+        answer_time_seconds: answerTimeSeconds,
       };
       const result = await api.study.evaluateAnswer(sessionId, payload);
       setEvaluation(result as EvaluateAnswerResponse);
@@ -60,6 +167,76 @@ export default function SessionClient({ sessionId }: Props) {
       setError(e?.message ?? "Failed to evaluate answer");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGenerateStory = async () => {
+    if (selectedIndex == null || !questions[selectedIndex]) return;
+    const q = questions[selectedIndex];
+    setError(null);
+    setLoadingStory(true);
+    try {
+      const token = await getToken();
+      const api = createApiClient(async () => token || null);
+      const result = (await api.study.generateStory(sessionId, q.question)) as {
+        question_id: number;
+        story_id: number;
+        structure_text: string;
+      };
+      setStoryMap((prev) => ({
+        ...prev,
+        [q.question]: { questionId: result.question_id, storyId: result.story_id },
+      }));
+      setStoryText(result.structure_text);
+      setStoryId(result.story_id);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to generate story");
+    } finally {
+      setLoadingStory(false);
+    }
+  };
+
+  const handleLoadStory = async () => {
+    if (selectedIndex == null || !questions[selectedIndex]) return;
+    const q = questions[selectedIndex];
+    const meta = storyMap[q.question];
+    if (!meta) return;
+    setError(null);
+    setLoadingStory(true);
+    try {
+      const token = await getToken();
+      const api = createApiClient(async () => token || null);
+      const result = (await api.study.getStory(meta.questionId)) as { structure_text: string; id: number };
+      setStoryText(result.structure_text);
+      setStoryId(result.id);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load story");
+    } finally {
+      setLoadingStory(false);
+    }
+  };
+
+  const handleSaveStory = async () => {
+    if (storyId == null) return;
+    setError(null);
+    setSavingStory(true);
+    try {
+      const token = await getToken();
+      const api = createApiClient(async () => token || null);
+      await api.study.updateStory(storyId, storyText);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to save story");
+    } finally {
+      setSavingStory(false);
+    }
+  };
+
+  const handleSkipQuestion = (idx: number) => {
+    setSkippedIndices((prev) => new Set(prev).add(idx));
+    if (selectedIndex === idx) {
+      setSelectedIndex(null);
+      setAnswer("");
+      setEvaluation(null);
     }
   };
 
@@ -80,8 +257,25 @@ export default function SessionClient({ sessionId }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Study session #{sessionId}</h1>
+        <div className="flex items-center gap-4">
+          {sessionStartTime != null && (
+            <div className="text-sm text-slate-600">
+              <span className="font-medium">Session:</span> {formatElapsed(sessionElapsedSeconds)}
+              {plannedDurationMinutes != null && (
+                <span className="ml-1 text-slate-500">
+                  / {plannedDurationMinutes} min
+                </span>
+              )}
+            </div>
+          )}
+          {selectedIndex != null && (
+            <div className="text-sm text-slate-600">
+              <span className="font-medium">Answer time:</span> {formatElapsed(questionElapsedSeconds)}
+            </div>
+          )}
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
@@ -118,32 +312,105 @@ export default function SessionClient({ sessionId }: Props) {
             </p>
           ) : (
             <ul className="space-y-2">
-              {questions.map((q, idx) => (
-                <li key={idx}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedIndex(idx);
-                      setEvaluation(null);
-                    }}
-                    className={`w-full text-left text-xs border rounded-md px-2 py-1 ${selectedIndex === idx
-                      ? "border-blue-600 bg-blue-50"
-                      : "border-gray-200 hover:bg-gray-50"
-                      }`}
-                  >
-                    <div className="font-medium">{q.question}</div>
-                    <div className="text-[10px] text-gray-500">
-                      {q.difficulty} · {q.status}
-                      {q.redo_reason ? ` · ${q.redo_reason}` : ""}
-                    </div>
-                  </button>
-                </li>
-              ))}
+              {questions.map((q, idx) => {
+                const isSkipped = skippedIndices.has(idx);
+                return (
+                  <li key={idx} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIndex(idx);
+                        setEvaluation(null);
+                        const q = questions[idx];
+                        const meta = storyMap[q?.question ?? ""];
+                        if (meta) {
+                          setStoryId(meta.storyId);
+                          setStoryText(""); // will be loaded when user clicks Load or we load below
+                        } else {
+                          setStoryId(null);
+                          setStoryText("");
+                        }
+                      }}
+                      className={`flex-1 text-left text-xs border rounded-md px-2 py-1 ${selectedIndex === idx
+                        ? "border-blue-600 bg-blue-50"
+                        : isSkipped
+                          ? "border-gray-200 bg-gray-100 text-gray-500"
+                          : "border-gray-200 hover:bg-gray-50"
+                        }`}
+                    >
+                      <div className="font-medium">{q.question}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {q.difficulty} · {q.status}
+                        {q.redo_reason ? ` · ${q.redo_reason}` : ""}
+                        {isSkipped && " · Skipped"}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSkipQuestion(idx)}
+                      disabled={ended}
+                      className="shrink-0 px-2 py-1 text-xs rounded border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      Skip
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
 
         <div className="md:col-span-2 space-y-4">
+          <div className="border rounded-lg p-3 bg-white shadow-sm">
+            <h2 className="font-semibold mb-2 text-sm">Story structure</h2>
+            {selectedIndex == null ? (
+              <p className="text-xs text-gray-500">
+                Select a question to generate or edit a story outline.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={handleGenerateStory}
+                    disabled={loadingStory || ended}
+                    className="px-2 py-1 rounded border border-slate-300 text-xs hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {loadingStory ? "Generating..." : "Generate story structure"}
+                  </button>
+                  {storyMap[questions[selectedIndex]?.question ?? ""] && (
+                    <button
+                      type="button"
+                      onClick={handleLoadStory}
+                      disabled={loadingStory || ended}
+                      className="px-2 py-1 rounded border border-slate-300 text-xs hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      Load saved
+                    </button>
+                  )}
+                  {storyId != null && (
+                    <button
+                      type="button"
+                      onClick={handleSaveStory}
+                      disabled={savingStory || ended}
+                      className="px-2 py-1 rounded bg-green-600 text-white text-xs disabled:opacity-50"
+                    >
+                      {savingStory ? "Saving..." : "Save story"}
+                    </button>
+                  )}
+                </div>
+                {storyText && (
+                  <textarea
+                    className="w-full border rounded-md p-2 text-sm min-h-[120px] bg-white text-slate-900"
+                    value={storyText}
+                    onChange={(e) => setStoryText(e.target.value)}
+                    placeholder="Story outline will appear here..."
+                  />
+                )}
+              </>
+            )}
+          </div>
+
           <div className="border rounded-lg p-3 bg-white shadow-sm">
             <h2 className="font-semibold mb-2 text-sm">Your answer</h2>
             {selectedIndex == null ? (

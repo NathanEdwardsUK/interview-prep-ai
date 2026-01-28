@@ -71,6 +71,11 @@ class ReconcileSessionResponse(BaseModel):
     question_attempts: List[QuestionAttemptSummary]
 
 
+# GenerateStoryStructure Schema
+class GenerateStoryStructureResponse(BaseModel):
+    structure_text: str  # Structured story outline for the question
+
+
 # Mode definitions with schemas
 MODES = {
     "suggest_plan": {
@@ -92,5 +97,9 @@ MODES = {
     "reconcile_session": {
         "response_schema": ReconcileSessionResponse.model_json_schema(),
         "max_tokens": 4000
+    },
+    "generate_story_structure": {
+        "response_schema": GenerateStoryStructureResponse.model_json_schema(),
+        "max_tokens": 2000
     }
 }

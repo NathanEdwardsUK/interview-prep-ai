@@ -1,5 +1,6 @@
 from app.llm.client import get_llm_client
 from app.llm.modes import MODES, GenerateQuestionsResponse
+from app.llm.retry import with_retry
 
 
 async def generate_questions(
@@ -44,11 +45,12 @@ For questions marked as "redo", include the reason (weak_answer, incomplete, tim
 Respond with a JSON object matching the required schema."""
     
     mode_config = MODES["generate_questions"]
-    response = await client.generate_structured(
-        prompt=prompt,
-        response_schema=mode_config["response_schema"],
-        max_tokens=mode_config["max_tokens"],
-        temperature=0.8
+    response = await with_retry(
+        lambda: client.generate_structured(
+            prompt=prompt,
+            response_schema=mode_config["response_schema"],
+            max_tokens=mode_config["max_tokens"],
+            temperature=0.8,
+        )
     )
-    
     return GenerateQuestionsResponse(**response)

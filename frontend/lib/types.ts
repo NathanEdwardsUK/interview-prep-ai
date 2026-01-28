@@ -10,6 +10,11 @@ export interface PlanOverview {
   rationale: string;
 }
 
+export interface TopicProgress {
+  strength_rating: number | null;
+  total_time_spent: number;
+}
+
 export interface PlanTopic {
   name: string;
   description: string;
@@ -17,6 +22,7 @@ export interface PlanTopic {
   daily_study_minutes: number;
   expected_outcome: string;
   topic_id?: number;
+  progress?: TopicProgress | null;
 }
 
 export interface Plan {

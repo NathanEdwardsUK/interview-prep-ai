@@ -66,6 +66,23 @@ export function PlanTopicsClient({ topics }: Props) {
               Expected outcome: {topic.expected_outcome}
             </p>
           )}
+          {topic.progress && (
+            <div className="flex gap-4 text-xs text-slate-600">
+              {topic.progress.strength_rating !== null && (
+                <span>
+                  Strength: <span className="font-medium">{topic.progress.strength_rating}/10</span>
+                </span>
+              )}
+              {topic.progress.total_time_spent > 0 && (
+                <span>
+                  Time spent: <span className="font-medium">{topic.progress.total_time_spent} min</span>
+                </span>
+              )}
+              {!topic.progress.strength_rating && topic.progress.total_time_spent === 0 && (
+                <span className="text-slate-400">Not yet assessed</span>
+              )}
+            </div>
+          )}
           <div className="flex justify-end">
             <button
               type="button"
