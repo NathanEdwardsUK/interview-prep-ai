@@ -34,6 +34,7 @@ class PlanTopicSchema(BaseModel):
     priority: int
     daily_study_minutes: int
     expected_outcome: str
+    topic_id: int | None = None
 
 
 class PlanResponse(BaseModel):

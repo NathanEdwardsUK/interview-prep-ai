@@ -17,13 +17,17 @@ export function PlanTopicsClient({ topics }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const handleStartSession = async (topic: PlanTopic) => {
+    if (!topic.topic_id) {
+      setError("This topic is missing an id; try refreshing the page.");
+      return;
+    }
     setError(null);
-    setLoadingTopicId(topic.priority); // use priority as a simple stable key
+    setLoadingTopicId(topic.topic_id);
     try {
       const token = await getToken();
       const api = createApiClient(async () => token || null);
       const session = (await api.study.startSession(
-        topic.priority, // placeholder; real impl should use topic id from backend
+        topic.topic_id,
         topic.daily_study_minutes,
       )) as StudySession;
       router.push(`/study/session/${session.id}`);
@@ -43,7 +47,7 @@ export function PlanTopicsClient({ topics }: Props) {
       )}
       {topics.map((topic) => (
         <div
-          key={topic.name}
+          key={topic.topic_id ?? topic.name}
           className="border rounded-md p-4 flex flex-col gap-2"
         >
           <div className="flex items-baseline justify-between gap-4">
@@ -66,10 +70,10 @@ export function PlanTopicsClient({ topics }: Props) {
             <button
               type="button"
               onClick={() => handleStartSession(topic)}
-              disabled={loadingTopicId === topic.priority}
+              disabled={loadingTopicId === topic.topic_id}
               className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm disabled:opacity-60"
             >
-              {loadingTopicId === topic.priority
+              {loadingTopicId === topic.topic_id
                 ? "Starting..."
                 : "Start session"}
             </button>

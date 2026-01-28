@@ -16,6 +16,7 @@ export interface PlanTopic {
   priority: number;
   daily_study_minutes: number;
   expected_outcome: string;
+  topic_id?: number;
 }
 
 export interface Plan {

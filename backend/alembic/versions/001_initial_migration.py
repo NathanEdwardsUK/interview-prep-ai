@@ -38,6 +38,7 @@ def upgrade() -> None:
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('planned_daily_study_time', sa.Integer(), nullable=False),
         sa.Column('priority', sa.Integer(), nullable=False),
+        sa.Column('expected_outcome', sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(['user_id'], ['users.clerk_user_id'], ),
         sa.PrimaryKeyConstraint('id')
     )

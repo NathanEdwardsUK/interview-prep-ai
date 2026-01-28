@@ -140,6 +140,30 @@ alembic upgrade head
 
 See `.env.example` files in `backend/` and `frontend/` directories for required variables.
 
+### Running with stubbed vs real LLMs
+
+The backend can run in two modes:
+
+- **Stubbed LLM (recommended for local dev & tests)**:
+  - In `backend/.env`, set:
+    - `USE_STUB_LLM=true`
+  - No external LLM calls are made; deterministic stub responses are used.
+  - Run tests from `backend/` with:
+    - `pytest`
+
+- **Real LLMs (for manual end-to-end testing)**:
+  - In `backend/.env`, set:
+    - `USE_STUB_LLM=false`
+    - `LLM_PROVIDER=openai` (or `anthropic`)
+    - Corresponding API key and model:
+      - `OPENAI_API_KEY`, `OPENAI_MODEL`
+      - or `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
+  - In `frontend/.env.local`, ensure:
+    - `NEXT_PUBLIC_API_URL` points to the backend (e.g. `http://localhost:8000`).
+    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is set to your Clerk frontend key.
+
+For both modes, `CLERK_SECRET_KEY` in `backend/.env` must be set so the backend can validate Clerk-issued tokens from the frontend.
+
 ## License
 
 MIT

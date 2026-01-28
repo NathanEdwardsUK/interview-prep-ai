@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { planApi } from "../lib/api";
 import type { Plan } from "../lib/types";
 import { PlanTopicsClient } from "./PlanTopicsClient";
+import { PlanCreatorClient } from "./PlanCreatorClient";
 
 async function fetchPlan(token: string | null): Promise<Plan | null> {
   if (!token) return null;
@@ -36,19 +37,7 @@ export default async function Home() {
           </div>
         )}
 
-        {token && !plan && (
-          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <p className="text-gray-600 mb-2">
-              You don&apos;t have a saved study plan yet.
-            </p>
-            <p className="text-gray-500 mb-4">
-              Start by creating a plan from your target role and experience.
-            </p>
-            <p className="text-sm text-gray-400">
-              (Plan creation UI will live here in the next step.)
-            </p>
-          </div>
-        )}
+        {token && !plan && <PlanCreatorClient />}
 
         {token && plan && (
           <div className="space-y-6">

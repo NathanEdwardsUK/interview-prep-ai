@@ -78,7 +78,8 @@ async def approve_plan(
                 name=topic_schema.name,
                 description=topic_schema.description,
                 planned_daily_study_time=topic_schema.daily_study_minutes,
-                priority=topic_schema.priority
+                priority=topic_schema.priority,
+                expected_outcome=topic_schema.expected_outcome,
             )
             db.add(plan_topic)
             created_topics.append(plan_topic)
@@ -134,7 +135,8 @@ async def view_plan(
             "description": t.description or "",
             "priority": t.priority,
             "daily_study_minutes": t.planned_daily_study_time,
-            "expected_outcome": "",  # Not stored yet in DB; left blank for now
+            "expected_outcome": t.expected_outcome or "",
+            "topic_id": t.id,
         }
         for t in topics
     ]

@@ -12,6 +12,7 @@ class PlanTopic(Base):
     description = Column(Text, nullable=True)
     planned_daily_study_time = Column(Integer, nullable=False)  # in minutes
     priority = Column(Integer, nullable=False)  # 1 = highest priority
+    expected_outcome = Column(Text, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="plan_topics")

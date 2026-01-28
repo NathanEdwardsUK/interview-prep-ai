@@ -19,6 +19,8 @@ export default function SessionClient({ sessionId }: Props) {
   );
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadQuestions = async () => {
@@ -61,21 +63,51 @@ export default function SessionClient({ sessionId }: Props) {
     }
   };
 
+  const handleEndSession = async () => {
+    setError(null);
+    setEnding(true);
+    try {
+      const token = await getToken();
+      const api = createApiClient(async () => token || null);
+      await api.study.endSession(sessionId);
+      setEnded(true);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to end session");
+    } finally {
+      setEnding(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Study session #{sessionId}</h1>
-        <button
-          type="button"
-          onClick={loadQuestions}
-          disabled={loadingQuestions}
-          className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm disabled:opacity-60"
-        >
-          {loadingQuestions ? "Generating..." : "Generate questions"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={loadQuestions}
+            disabled={loadingQuestions || ended}
+            className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm disabled:opacity-60"
+          >
+            {loadingQuestions ? "Generating..." : "Generate questions"}
+          </button>
+          <button
+            type="button"
+            onClick={handleEndSession}
+            disabled={ending || ended}
+            className="px-3 py-1.5 rounded-md bg-gray-800 text-white text-sm disabled:opacity-60"
+          >
+            {ended ? "Session ended" : ending ? "Ending..." : "End session"}
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {ended && !error && (
+        <p className="text-sm text-green-700">
+          Session ended. Your progress for this topic has been updated.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-1 border rounded-lg p-3 bg-white shadow-sm">
@@ -95,8 +127,8 @@ export default function SessionClient({ sessionId }: Props) {
                       setEvaluation(null);
                     }}
                     className={`w-full text-left text-xs border rounded-md px-2 py-1 ${selectedIndex === idx
-                        ? "border-blue-600 bg-blue-50"
-                        : "border-gray-200 hover:bg-gray-50"
+                      ? "border-blue-600 bg-blue-50"
+                      : "border-gray-200 hover:bg-gray-50"
                       }`}
                   >
                     <div className="font-medium">{q.question}</div>

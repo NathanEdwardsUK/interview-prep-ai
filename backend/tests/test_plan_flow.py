@@ -4,7 +4,7 @@ Integration tests for study plan flow: suggest -> approve -> save to DB
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models.plan import PlanTopic
+from app.models.plan import PlanTopic, TopicProgress
 from app.models.user import User
 
 
@@ -227,3 +227,79 @@ def test_plan_replacement(test_client, db_session: Session, test_user: User):
     assert "Topic A" not in topic_names
     assert "Topic B" in topic_names
     assert "Topic C" in topic_names
+
+
+def test_view_plan_no_topics_returns_404(test_client):
+    """GET /plan/view should return 404 when user has no saved topics."""
+    response = test_client.get("/api/v1/plan/view")
+    assert response.status_code == 404
+
+
+def test_view_plan_returns_saved_topics(test_client, db_session: Session, test_user: User):
+    """GET /plan/view should return PlanResponse built from PlanTopic records."""
+    # Create topics in DB
+    t1 = PlanTopic(
+        user_id=test_user.clerk_user_id,
+        name="Algorithms",
+        description="Algo practice",
+        planned_daily_study_time=40,
+        priority=1,
+        expected_outcome="Solve medium questions",
+    )
+    t2 = PlanTopic(
+        user_id=test_user.clerk_user_id,
+        name="System Design",
+        description="Design large systems",
+        planned_daily_study_time=20,
+        priority=2,
+        expected_outcome="Explain tradeoffs",
+    )
+    db_session.add_all([t1, t2])
+    db_session.commit()
+
+    response = test_client.get("/api/v1/plan/view")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["plan_overview"]["total_daily_minutes"] == 60
+    names = [t["name"] for t in data["plan_topics"]]
+    assert set(names) == {"Algorithms", "System Design"}
+    # Ensure topic_id is present and matches DB ids
+    returned_ids = {t["topic_id"] for t in data["plan_topics"]}
+    assert returned_ids == {t1.id, t2.id}
+
+
+def test_end_session_updates_topic_progress(test_client, db_session: Session, test_user: User):
+    """Ending a session should update TopicProgress for the session's topic."""
+    # Create a topic and session
+    topic = PlanTopic(
+        user_id=test_user.clerk_user_id,
+        name="Data Structures",
+        description="Lists and trees",
+        planned_daily_study_time=30,
+        priority=1,
+        expected_outcome="Be comfortable with DS",
+    )
+    db_session.add(topic)
+    db_session.commit()
+    db_session.refresh(topic)
+
+    # Start a session via API to ensure wiring works
+    start_resp = test_client.post(
+        "/api/v1/study/start_session",
+        params={"topic_id": topic.id, "planned_study_time": 30},
+    )
+    assert start_resp.status_code == 200
+    session_id = start_resp.json()["id"]
+
+    # End the session
+    end_resp = test_client.put(f"/api/v1/study/end_session/{session_id}")
+    assert end_resp.status_code == 200
+
+    # Verify TopicProgress was created/updated
+    progress = db_session.query(TopicProgress).filter(
+        TopicProgress.user_id == test_user.clerk_user_id,
+        TopicProgress.topic_id == topic.id,
+    ).first()
+    assert progress is not None
+    assert progress.total_time_spent == 30

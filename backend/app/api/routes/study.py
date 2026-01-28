@@ -4,14 +4,17 @@ from app.database import get_db
 from app.api.dependencies import get_current_user
 from app.models.user import User
 from app.models.session import StudySession
+from app.models.question import QuestionAttempt, Question
+from app.models.plan import TopicProgress
 from app.schemas.session import StudySessionCreate, StudySessionResponse
 from app.schemas.question import (
     GenerateQuestionsResponse,
     EvaluateAnswerRequest,
-    EvaluateAnswerResponse
+    EvaluateAnswerResponse,
 )
 from app.llm.generate_questions import generate_questions
 from app.llm.evaluate_answer import evaluate_answer
+from app.llm.reconcile_session import reconcile_session
 from datetime import datetime
 
 router = APIRouter(prefix="/study", tags=["study"])
@@ -58,12 +61,58 @@ async def end_session(
         raise HTTPException(status_code=404, detail="Session not found")
     
     session.end_time = datetime.utcnow()
+
+    # Gather question attempts for this session
+    attempts = (
+        db.query(QuestionAttempt, Question)
+        .join(Question, Question.id == QuestionAttempt.question_id)
+        .filter(QuestionAttempt.study_session_id == session_id)
+        .all()
+    )
+
+    question_attempt_dicts = [
+        {
+            "question": question.question,
+            "answer": attempt.raw_answer,
+            "score": attempt.score_rating,
+        }
+        for attempt, question in attempts
+    ]
+
+    # Call LLM to reconcile the session and summarize performance
+    avg_score = None
+    if question_attempt_dicts:
+        summary = await reconcile_session(question_attempt_dicts)
+        best_scores = [qa.best_score for qa in summary.question_attempts]
+        if best_scores:
+            avg_score = int(sum(best_scores) / len(best_scores))
+
+    # Update topic progress for this user/topic
+    topic_progress = (
+        db.query(TopicProgress)
+        .filter(
+            TopicProgress.user_id == current_user.clerk_user_id,
+            TopicProgress.topic_id == session.topic_id,
+        )
+        .first()
+    )
+
+    if not topic_progress:
+        topic_progress = TopicProgress(
+            user_id=current_user.clerk_user_id,
+            topic_id=session.topic_id,
+            strength_rating=avg_score,
+            total_time_spent=session.planned_duration,
+        )
+        db.add(topic_progress)
+    else:
+        if avg_score is not None:
+            topic_progress.strength_rating = avg_score
+        topic_progress.total_time_spent = (topic_progress.total_time_spent or 0) + session.planned_duration
+
     db.commit()
     db.refresh(session)
-    
-    # TODO: Trigger reconciliation process
-    # This should call the reconcile_session LLM function
-    
+
     return session
 
 
