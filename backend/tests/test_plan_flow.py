@@ -2,14 +2,13 @@
 Integration tests for study plan flow: suggest -> approve -> save to DB
 """
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.plan import PlanTopic
 from app.models.user import User
 
 
-def test_suggest_new_plan_with_stub(test_client: TestClient):
+def test_suggest_new_plan_with_stub(test_client):
     """Test that suggest_new_plan returns a valid PlanResponse using stub LLM"""
     response = test_client.post(
         "/api/v1/plan/suggest_new",
@@ -48,7 +47,7 @@ def test_suggest_new_plan_with_stub(test_client: TestClient):
         assert isinstance(topic["daily_study_minutes"], int)
 
 
-def test_approve_plan_saves_to_db(test_client: TestClient, db_session: Session, test_user: User):
+def test_approve_plan_saves_to_db(test_client, db_session: Session, test_user: User):
     """Test that approve_plan saves PlanTopic records to the database"""
     # Create a plan response (matching stub output structure)
     plan_data = {
@@ -110,7 +109,7 @@ def test_approve_plan_saves_to_db(test_client: TestClient, db_session: Session, 
     assert topic2.user_id == test_user.clerk_user_id
 
 
-def test_full_flow_suggest_and_approve(test_client: TestClient, db_session: Session, test_user: User):
+def test_full_flow_suggest_and_approve(test_client, db_session: Session, test_user: User):
     """Test the complete flow: suggest plan -> approve plan -> verify saved"""
     # Step 1: Suggest a new plan (uses stub LLM)
     suggest_response = test_client.post(
@@ -154,7 +153,7 @@ def test_full_flow_suggest_and_approve(test_client: TestClient, db_session: Sess
         assert saved_topic.priority == suggested_topic["priority"]
 
 
-def test_plan_replacement(test_client: TestClient, db_session: Session, test_user: User):
+def test_plan_replacement(test_client, db_session: Session, test_user: User):
     """Test that approving a new plan replaces existing plan topics"""
     # Create and approve initial plan
     initial_plan = {

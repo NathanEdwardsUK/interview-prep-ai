@@ -1,14 +1,85 @@
-export default function Home() {
+import { auth } from "@clerk/nextjs/server";
+import { planApi } from "../lib/api";
+import type { Plan } from "../lib/types";
+import { PlanTopicsClient } from "./PlanTopicsClient";
+
+async function fetchPlan(token: string | null): Promise<Plan | null> {
+  if (!token) return null;
+  try {
+    const data = (await planApi.viewPlan(token)) as Plan;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export default async function Home() {
+  const { getToken } = auth();
+  const token = await getToken();
+  const plan = await fetchPlan(token);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-8">
+    <main className="flex min-h-screen flex-col items-center justify-start p-8">
+      <div className="w-full max-w-4xl">
+        <h1 className="text-4xl font-bold text-center mb-4">
           Interview Prep AI
         </h1>
-        <p className="text-center text-lg">
+        <p className="text-center text-lg mb-8">
           AI-powered interview preparation platform
         </p>
+
+        {!token && (
+          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+            <p className="text-gray-600 mb-2">
+              Please sign in to view and manage your study plan.
+            </p>
+          </div>
+        )}
+
+        {token && !plan && (
+          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+            <p className="text-gray-600 mb-2">
+              You don&apos;t have a saved study plan yet.
+            </p>
+            <p className="text-gray-500 mb-4">
+              Start by creating a plan from your target role and experience.
+            </p>
+            <p className="text-sm text-gray-400">
+              (Plan creation UI will live here in the next step.)
+            </p>
+          </div>
+        )}
+
+        {token && plan && (
+          <div className="space-y-6">
+            <section className="border rounded-lg p-6 bg-white shadow-sm">
+              <h2 className="text-2xl font-semibold mb-2">Plan overview</h2>
+              <p className="text-gray-700">
+                <span className="font-medium">Target role:</span>{" "}
+                {plan.plan_overview.target_role}
+              </p>
+              <p className="text-gray-700">
+                <span className="font-medium">Total daily minutes:</span>{" "}
+                {plan.plan_overview.total_daily_minutes}
+              </p>
+              <p className="text-gray-700">
+                <span className="font-medium">Time horizon:</span>{" "}
+                {plan.plan_overview.time_horizon_weeks} weeks
+              </p>
+              <p className="text-gray-700 mt-2">
+                {plan.plan_overview.rationale}
+              </p>
+            </section>
+
+            <section className="border rounded-lg p-6 bg-white shadow-sm">
+              <h2 className="text-2xl font-semibold mb-4">
+                Topics &amp; sessions
+              </h2>
+              <PlanTopicsClient topics={plan.plan_topics} />
+            </section>
+          </div>
+        )}
       </div>
     </main>
-  )
+  );
 }

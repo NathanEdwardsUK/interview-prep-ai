@@ -106,8 +106,40 @@ async def view_plan(
     db: Session = Depends(get_db)
 ):
     """
-    Get the current user's study plan.
+    Get the current user's study plan from the database.
     """
-    # TODO: Implement plan retrieval logic
-    # This should fetch PlanTopic records for the user and format as PlanResponse
-    raise HTTPException(status_code=501, detail="Not yet implemented")
+    topics = (
+        db.query(PlanTopic)
+        .filter(PlanTopic.user_id == current_user.clerk_user_id)
+        .order_by(PlanTopic.priority.asc(), PlanTopic.id.asc())
+        .all()
+    )
+
+    if not topics:
+        raise HTTPException(status_code=404, detail="No plan found for user")
+
+    total_daily_minutes = sum(t.planned_daily_study_time for t in topics)
+
+    # Build a simple overview using current_applying_role and topic data
+    overview = {
+        "target_role": current_user.current_applying_role or "Interview Candidate",
+        "total_daily_minutes": total_daily_minutes,
+        "time_horizon_weeks": 8,
+        "rationale": "Study plan loaded from your saved topics.",
+    }
+
+    plan_topics = [
+        {
+            "name": t.name,
+            "description": t.description or "",
+            "priority": t.priority,
+            "daily_study_minutes": t.planned_daily_study_time,
+            "expected_outcome": "",  # Not stored yet in DB; left blank for now
+        }
+        for t in topics
+    ]
+
+    return {
+        "plan_overview": overview,
+        "plan_topics": plan_topics,
+    }
