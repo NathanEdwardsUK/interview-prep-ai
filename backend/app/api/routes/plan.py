@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.api.dependencies import get_current_user
 from app.models.user import User
+from app.models.plan import PlanTopic
 from app.schemas.plan import (
     SuggestNewPlanRequest,
     SuggestChangesRequest,
@@ -65,9 +66,38 @@ async def approve_plan(
     """
     Save an approved plan to the database.
     """
-    # TODO: Implement plan saving logic
-    # This should create PlanTopic records for the user
-    return {"status": "success", "message": "Plan approved and saved"}
+    try:
+        # Delete existing PlanTopic records for the user
+        db.query(PlanTopic).filter(PlanTopic.user_id == current_user.clerk_user_id).delete()
+        
+        # Create new PlanTopic records from the approved plan
+        created_topics = []
+        for topic_schema in request.plan.plan_topics:
+            plan_topic = PlanTopic(
+                user_id=current_user.clerk_user_id,
+                name=topic_schema.name,
+                description=topic_schema.description,
+                planned_daily_study_time=topic_schema.daily_study_minutes,
+                priority=topic_schema.priority
+            )
+            db.add(plan_topic)
+            created_topics.append(plan_topic)
+        
+        # Commit the transaction
+        db.commit()
+        
+        # Refresh to get IDs
+        for topic in created_topics:
+            db.refresh(topic)
+        
+        return {
+            "status": "success",
+            "message": "Plan approved and saved",
+            "topic_ids": [topic.id for topic in created_topics]
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save plan: {str(e)}")
 
 
 @router.get("/view", response_model=PlanResponse)

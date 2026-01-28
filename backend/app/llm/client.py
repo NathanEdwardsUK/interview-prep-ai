@@ -3,6 +3,7 @@ from typing import Any, Dict
 from app.config import settings
 import openai
 from anthropic import Anthropic
+from app.llm.stub_client import StubLLMClient
 
 
 class LLMClient(ABC):
@@ -112,7 +113,9 @@ class AnthropicClient(LLMClient):
 
 def get_llm_client() -> LLMClient:
     """Factory function to get the appropriate LLM client"""
-    if settings.LLM_PROVIDER == "openai":
+    if settings.USE_STUB_LLM:
+        return StubLLMClient()
+    elif settings.LLM_PROVIDER == "openai":
         return OpenAIClient()
     elif settings.LLM_PROVIDER == "anthropic":
         return AnthropicClient()

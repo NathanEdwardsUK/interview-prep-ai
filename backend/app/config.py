@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     LLM_PROVIDER: Literal["openai", "anthropic"] = "openai"
+    USE_STUB_LLM: bool = False  # Use stub client for testing
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     
