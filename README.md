@@ -54,35 +54,49 @@ interview-prep-ai/
    npm install
    ```
 
-4. **Start PostgreSQL**
+4. **Configure environment variables**
+
+   Environment files have been created from `.env.example`:
+   - `backend/.env` - Backend environment variables
+   - `frontend/.env.local` - Frontend environment variables
+
+   Update these files with your actual values:
+   - Database URL (defaults to `postgresql://postgres:postgres@localhost:5432/interview_prep`)
+   - Clerk keys (get from [Clerk Dashboard](https://dashboard.clerk.com)):
+     - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` for frontend
+     - `CLERK_SECRET_KEY` for backend
+   - LLM API keys:
+     - `OPENAI_API_KEY` if using OpenAI
+     - `ANTHROPIC_API_KEY` if using Anthropic
+
+5. **Start PostgreSQL**
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
-5. **Configure environment variables**
+   Verify it's running:
 
-   Copy `.env.example` files and fill in your values:
-   - `backend/.env.example` → `backend/.env`
-   - `frontend/.env.example` → `frontend/.env.local`
-
-   Required variables:
-   - Database URL
-   - Clerk keys (publishable key for frontend, secret key for backend)
-   - LLM API keys (OpenAI or Anthropic)
+   ```bash
+   docker compose ps
+   ```
 
 6. **Run database migrations**
 
    ```bash
    cd backend
+   source venv/bin/activate  # Activate virtual environment if not already active
    alembic upgrade head
    ```
+
+   This will create all database tables. The initial migration (`001_initial_migration.py`) has been created.
 
 7. **Start the development servers**
 
    Backend (from `backend/` directory):
 
    ```bash
+   source venv/bin/activate  # Activate virtual environment
    uvicorn app.main:app --reload
    ```
 
@@ -96,6 +110,7 @@ interview-prep-ai/
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
+   - Health Check: http://localhost:8000/health
 
 ## Development
 
