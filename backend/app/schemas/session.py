@@ -12,6 +12,11 @@ class StudySessionCreate(StudySessionBase):
     pass
 
 
+class StartSessionRequest(BaseModel):
+    topic_id: int
+    planned_study_time: int
+
+
 class StudySessionResponse(StudySessionBase):
     id: int
     user_id: str

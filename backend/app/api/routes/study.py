@@ -7,7 +7,7 @@ from app.models.session import StudySession
 from app.models.question import QuestionAttempt, Question, StoryStructure
 from app.models.plan import PlanTopic
 from app.models.plan import TopicProgress
-from app.schemas.session import StudySessionCreate, StudySessionResponse
+from app.schemas.session import StudySessionCreate, StudySessionResponse, StartSessionRequest, StartSessionRequest
 from app.schemas.question import (
     GenerateQuestionsResponse,
     EvaluateAnswerRequest,
@@ -125,8 +125,7 @@ async def get_session(
 
 @router.post("/start_session", response_model=StudySessionResponse)
 async def start_session(
-    topic_id: int,
-    planned_study_time: int,
+    request: StartSessionRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -135,8 +134,8 @@ async def start_session(
     """
     session = StudySession(
         user_id=current_user.clerk_user_id,
-        topic_id=topic_id,
-        planned_duration=planned_study_time,
+        topic_id=request.topic_id,
+        planned_duration=request.planned_study_time,
         start_time=datetime.utcnow(),
         last_interaction_time=datetime.utcnow()
     )
