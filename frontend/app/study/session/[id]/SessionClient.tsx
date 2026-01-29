@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { createApiClient } from "../../../../lib/api";
 import type { Question, EvaluateAnswerResponse } from "../../../../lib/types";
 import StudySessionTimer from "../../../components/StudySessionTimer";
+import DictationButton from "../../../components/DictationButton";
 
 interface Props {
   sessionId: number;
@@ -377,6 +378,16 @@ export default function SessionClient({ sessionId }: Props) {
                 <p className="text-xs text-gray-700 mb-2">
                   {questions[selectedIndex]?.question}
                 </p>
+                <div className="flex justify-end mb-2">
+                  <DictationButton
+                    onResult={(text, isFinal) => {
+                      if (isFinal) {
+                        setAnswer((prev) => prev + (prev ? " " : "") + text);
+                      }
+                    }}
+                    disabled={submitting}
+                  />
+                </div>
                 <textarea
                   className="w-full border rounded-md p-2 text-sm min-h-[120px]"
                   value={answer}

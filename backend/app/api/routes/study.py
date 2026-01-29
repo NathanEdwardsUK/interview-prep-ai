@@ -312,17 +312,18 @@ async def evaluate_answer_endpoint(
             .first()
         )
         
+        anchors_payload = [{"name": a.name, "anchor": a.anchor} for a in result.anchors] if result.anchors else None
         if not question:
             question = Question(
                 topic_id=session.topic_id,
                 question=request.question,
-                answer_anchors=[{"name": a.get("name", ""), "anchor": a.get("anchor", "")} for a in result.anchors] if result.anchors else None,
+                answer_anchors=anchors_payload,
             )
             db.add(question)
             db.flush()  # Get question.id without committing
         else:
             # Update anchors from latest evaluation (best anchors)
-            question.answer_anchors = [{"name": a.get("name", ""), "anchor": a.get("anchor", "")} for a in result.anchors] if result.anchors else question.answer_anchors
+            question.answer_anchors = anchors_payload if anchors_payload else question.answer_anchors
         
         # Create QuestionAttempt record
         attempt = QuestionAttempt(
