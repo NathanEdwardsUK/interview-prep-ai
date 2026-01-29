@@ -20,7 +20,7 @@ from app.llm.generate_questions import generate_questions
 from app.llm.evaluate_answer import evaluate_answer
 from app.llm.reconcile_session import reconcile_session
 from app.llm.generate_story_structure import generate_story_structure
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/study", tags=["study"])
 
@@ -136,8 +136,8 @@ async def start_session(
         user_id=current_user.clerk_user_id,
         topic_id=request.topic_id,
         planned_duration=request.planned_study_time,
-        start_time=datetime.utcnow(),
-        last_interaction_time=datetime.utcnow()
+        start_time=datetime.now(timezone.utc),
+        last_interaction_time=datetime.now(timezone.utc),
     )
     db.add(session)
     db.commit()
@@ -162,7 +162,7 @@ async def end_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    session.end_time = datetime.utcnow()
+    session.end_time = datetime.now(timezone.utc)
 
     # Gather question attempts for this session
     attempts = (
@@ -335,7 +335,7 @@ async def evaluate_answer_endpoint(
         db.add(attempt)
         
         # Update session last interaction time
-        session.last_interaction_time = datetime.utcnow()
+        session.last_interaction_time = datetime.now(timezone.utc)
         
         db.commit()
         

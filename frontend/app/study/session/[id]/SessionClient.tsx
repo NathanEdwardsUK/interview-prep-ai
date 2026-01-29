@@ -1,21 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { createApiClient } from "../../../../lib/api";
 import type { Question, EvaluateAnswerResponse } from "../../../../lib/types";
+import StudySessionTimer from "../../../components/StudySessionTimer";
 
 interface Props {
   sessionId: number;
 }
 
-function formatElapsed(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
 export default function SessionClient({ sessionId }: Props) {
+  const router = useRouter();
   const { getToken } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -39,13 +36,12 @@ export default function SessionClient({ sessionId }: Props) {
   // Session timer: start_time and planned_duration from API
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [plannedDurationMinutes, setPlannedDurationMinutes] = useState<number | null>(null);
-  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0);
-  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const questionSelectedAtRef = useRef<number | null>(null);
 
-  // Per-question timer
-  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
-  const [questionElapsedSeconds, setQuestionElapsedSeconds] = useState(0);
-  const questionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (selectedIndex == null) questionSelectedAtRef.current = null;
+    else questionSelectedAtRef.current = Date.now();
+  }, [selectedIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +55,11 @@ export default function SessionClient({ sessionId }: Props) {
           end_time?: string | null;
         };
         if (cancelled) return;
-        setSessionStartTime(new Date(session.start_time));
+        // API may send naive ISO strings (no Z); treat as UTC so elapsed time is correct
+        const startStr = session.start_time;
+        const asUtc =
+          /[Z+-]\d{2}:?\d{2}$/.test(startStr) ? startStr : startStr.replace(/Z?$/, "Z");
+        setSessionStartTime(new Date(asUtc));
         setPlannedDurationMinutes(session.planned_duration);
         if (session.end_time) setEnded(true);
       } catch {
@@ -70,41 +70,6 @@ export default function SessionClient({ sessionId }: Props) {
       cancelled = true;
     };
   }, [sessionId, getToken]);
-
-  useEffect(() => {
-    if (!sessionStartTime || ended) return;
-    const tick = () => {
-      setSessionElapsedSeconds(Math.floor((Date.now() - sessionStartTime.getTime()) / 1000));
-    };
-    tick();
-    sessionTimerRef.current = setInterval(tick, 1000);
-    return () => {
-      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
-    };
-  }, [sessionStartTime, ended]);
-
-  useEffect(() => {
-    if (selectedIndex == null) {
-      setQuestionStartTime(null);
-      setQuestionElapsedSeconds(0);
-      if (questionTimerRef.current) {
-        clearInterval(questionTimerRef.current);
-        questionTimerRef.current = null;
-      }
-      return;
-    }
-    const start = Date.now();
-    setQuestionStartTime(start);
-    setQuestionElapsedSeconds(0);
-    const id = setInterval(() => {
-      setQuestionElapsedSeconds(Math.floor((Date.now() - start) / 1000));
-    }, 1000);
-    questionTimerRef.current = id;
-    return () => {
-      clearInterval(id);
-      questionTimerRef.current = null;
-    };
-  }, [selectedIndex]);
 
   useEffect(() => {
     if (selectedIndex == null || !questions[selectedIndex]) return;
@@ -151,7 +116,7 @@ export default function SessionClient({ sessionId }: Props) {
     if (selectedIndex == null || !questions[selectedIndex]) return;
     setError(null);
     setSubmitting(true);
-    const answerTimeSeconds = questionStartTime != null ? Math.floor((Date.now() - questionStartTime) / 1000) : undefined;
+    const answerTimeSeconds = questionSelectedAtRef.current != null ? Math.floor((Date.now() - questionSelectedAtRef.current) / 1000) : undefined;
     try {
       const token = await getToken();
       const api = createApiClient(async () => token || null);
@@ -248,6 +213,7 @@ export default function SessionClient({ sessionId }: Props) {
       const api = createApiClient(async () => token || null);
       await api.study.endSession(sessionId);
       setEnded(true);
+      router.push("/");
     } catch (e: any) {
       setError(e?.message ?? "Failed to end session");
     } finally {
@@ -259,23 +225,12 @@ export default function SessionClient({ sessionId }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Study session #{sessionId}</h1>
-        <div className="flex items-center gap-4">
-          {sessionStartTime != null && (
-            <div className="text-sm text-slate-600">
-              <span className="font-medium">Session:</span> {formatElapsed(sessionElapsedSeconds)}
-              {plannedDurationMinutes != null && (
-                <span className="ml-1 text-slate-500">
-                  / {plannedDurationMinutes} min
-                </span>
-              )}
-            </div>
-          )}
-          {selectedIndex != null && (
-            <div className="text-sm text-slate-600">
-              <span className="font-medium">Answer time:</span> {formatElapsed(questionElapsedSeconds)}
-            </div>
-          )}
-        </div>
+        <StudySessionTimer
+          sessionStartTime={sessionStartTime}
+          plannedDurationMinutes={plannedDurationMinutes}
+          ended={ended}
+          selectedIndex={selectedIndex}
+        />
         <div className="flex gap-2">
           <button
             type="button"
